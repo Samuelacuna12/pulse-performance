@@ -1,0 +1,106 @@
+name: Sync PULSE assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-pulse-assets.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-assets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install gdown pillow
+
+      - name: Download PULSE source media from Google Drive
+        run: |
+          mkdir -p source assets
+          gdown 'https://drive.google.com/uc?id=1u6sfQBpp9DOTdIUMN59Lp9is4dRcTgbi' -O source/run-golden.mov
+          gdown 'https://drive.google.com/uc?id=18S95AXFbqdaXNXMQdsZELeWgiZqTfzKE' -O source/run-rooftop.mov
+          gdown 'https://drive.google.com/uc?id=119d51UD0s4RlOXxmAmf0w8omKPcaFo4y' -O source/cycle-forest.mp4
+          gdown 'https://drive.google.com/uc?id=1B-5GljZ2syC2tYFjjVo4T_CVkVwrbGVQ' -O source/cycle-road.mp4
+          gdown 'https://drive.google.com/uc?id=1E9uSR6X9FQhtEbnDEkk1jQJ_muTCrczH' -O source/swim-redcap.mp4
+          gdown 'https://drive.google.com/uc?id=1JT0lxK6-Dw5v02T4yeL8CymZ6DM6sm9l' -O source/swim-underwater.mp4
+          gdown 'https://drive.google.com/uc?id=1ea6n1mya3B9_bh2f_tKZBOBwmpt9IN0f' -O source/open-water.jpg
+          gdown 'https://drive.google.com/uc?id=14BQFQUdgzi4V-ydNy7cPTz07LpO749E1' -O source/wetsuit.jpg
+          gdown 'https://drive.google.com/uc?id=1Tk_aP2AIbS9sw6xmYSigE4NJwKbWnHNw' -O source/tri-bike.jpg
+          gdown 'https://drive.google.com/uc?id=1PlVU2PKJk6O_C2qWk9gHA35N91aAlCCG' -O source/cycle-blur.jpg
+          gdown 'https://drive.google.com/uc?id=13_E4YKdR9moMkPxF8crpfG8ap49GZl8w' -O source/helmet.jpg
+          gdown 'https://drive.google.com/uc?id=1U3gjHY2ztzcHbOQq4sh224GAed0zVwxv' -O source/swim-race.jpg
+          gdown 'https://drive.google.com/uc?id=1ocL2A6vcYb-piOzIg2XOASiVh1ZVOQz0' -O source/run-editorial.jpg
+
+      - name: Build responsive video assets
+        run: |
+          ffmpeg -y -ss 0 -t 8 -i source/run-golden.mov -an -vf "scale=960:540:force_original_aspect_ratio=increase,crop=960:540" -c:v libx264 -preset faster -crf 32 -movflags +faststart assets/hero-run-desktop.mp4
+          ffmpeg -y -ss 0 -t 8 -i source/run-golden.mov -an -vf "scale=540:960:force_original_aspect_ratio=increase,crop=540:960" -c:v libx264 -preset faster -crf 33 -movflags +faststart assets/hero-run-mobile.mp4
+          ffmpeg -y -ss 0 -t 8 -i source/cycle-forest.mp4 -an -vf "scale=960:540:force_original_aspect_ratio=increase,crop=960:540" -c:v libx264 -preset faster -crf 33 -movflags +faststart assets/hero-cycle-desktop.mp4
+          ffmpeg -y -ss 0 -t 8 -i source/cycle-forest.mp4 -an -vf "scale=540:960:force_original_aspect_ratio=increase,crop=540:960" -c:v libx264 -preset faster -crf 34 -movflags +faststart assets/hero-cycle-mobile.mp4
+          ffmpeg -y -ss 0 -t 8 -i source/swim-redcap.mp4 -an -vf "scale=960:540:force_original_aspect_ratio=increase,crop=960:540" -c:v libx264 -preset faster -crf 33 -movflags +faststart assets/hero-swim-desktop.mp4
+          ffmpeg -y -ss 0 -t 8 -i source/swim-underwater.mp4 -an -vf "scale=540:960:force_original_aspect_ratio=increase,crop=540:960" -c:v libx264 -preset faster -crf 34 -movflags +faststart assets/hero-swim-mobile.mp4
+          ffmpeg -y -ss 0 -t 7 -i source/run-rooftop.mov -an -vf "scale=540:720:force_original_aspect_ratio=increase,crop=540:720" -c:v libx264 -preset faster -crf 32 -movflags +faststart assets/run-feature.mp4
+          ffmpeg -y -ss 0 -t 7 -i source/cycle-road.mp4 -an -vf "scale=540:960:force_original_aspect_ratio=increase,crop=540:960" -c:v libx264 -preset faster -crf 33 -movflags +faststart assets/cycle-feature.mp4
+          ffmpeg -y -ss 0 -t 7 -i source/swim-redcap.mp4 -an -vf "scale=540:960:force_original_aspect_ratio=increase,crop=540:960" -c:v libx264 -preset faster -crf 33 -movflags +faststart assets/swim-feature.mp4
+          ffmpeg -y -ss 0 -t 7 -i source/swim-underwater.mp4 -an -vf "scale=540:960:force_original_aspect_ratio=increase,crop=540:960" -c:v libx264 -preset faster -crf 34 -movflags +faststart assets/swim-underwater.mp4
+
+      - name: Build responsive WebP images and posters
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import subprocess
+          src=Path('source'); out=Path('assets')
+          def cover(inp, dest, size, q=84):
+              im=Image.open(inp).convert('RGB'); sw,sh=im.size; tw,th=size
+              sr=sw/sh; tr=tw/th
+              if sr>tr:
+                  nw=int(sh*tr); x=(sw-nw)//2; box=(x,0,x+nw,sh)
+              else:
+                  nh=int(sw/tr); y=(sh-nh)//2; box=(0,y,sw,y+nh)
+              im.crop(box).resize(size,Image.LANCZOS).save(dest,'WEBP',quality=q,method=6)
+          cover(src/'run-editorial.jpg',out/'run-editorial.webp',(1400,1000))
+          cover(src/'cycle-blur.jpg',out/'cycle-blur.webp',(1400,1000))
+          cover(src/'tri-bike.jpg',out/'tri-bike.webp',(1600,1100))
+          cover(src/'tri-bike.jpg',out/'hero-tri.webp',(1800,1100))
+          cover(src/'wetsuit.jpg',out/'wetsuit.webp',(1200,1500))
+          cover(src/'swim-race.jpg',out/'swim-race.webp',(1400,1000))
+          cover(src/'helmet.jpg',out/'helmet.webp',(1200,1500))
+          cover(src/'open-water.jpg',out/'open-water.webp',(1200,1500))
+          posters=[
+            ('hero-run-desktop.mp4','hero-run-poster.webp',(1600,900)),
+            ('hero-cycle-desktop.mp4','hero-cycle-poster.webp',(1600,900)),
+            ('hero-swim-desktop.mp4','hero-swim-poster.webp',(1600,900)),
+            ('cycle-feature.mp4','cycle-feature-poster.webp',(1200,1600)),
+            ('swim-feature.mp4','swim-feature-poster.webp',(1200,1600)),
+            ('swim-underwater.mp4','swim-underwater-poster.webp',(1200,1600)),
+          ]
+          for v,p,size in posters:
+              tmp=out/(p+'.jpg')
+              subprocess.run(['ffmpeg','-y','-ss','1','-i',str(out/v),'-frames:v','1',str(tmp)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+              cover(tmp,out/p,size); tmp.unlink()
+          PY
+
+      - name: Commit optimized media to repository
+        run: |
+          rm -rf source
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets
+          if git diff --cached --quiet; then
+            echo 'No asset changes to commit.'
+          else
+            git commit -m 'Actualizar fotos y videos optimizados de PULSE'
+            git push
+          fi
